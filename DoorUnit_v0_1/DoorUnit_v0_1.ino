@@ -22,6 +22,8 @@
 */
 
 #include <SD.h>
+#include <Ethernet.h>
+#include <SPI.h>
 
 // Here's our constants.
 //
@@ -43,24 +45,45 @@ void setup();
 void loop();
 boolean seekRFID(char *id);
 void unlockDoor();
-void crashAndBurn();
+void error_P(const char* str);
 
-// This is our data.
+// SD
 File openFile;
+
+// Ethernet
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte ip[] = { 192, 168, 0, 80 };
+IPAddress gympass(192,168,0,10);
+EthernetServer server(80);
+EthernetClient localclient;
+
+// Other
 char rfidTagID[11] = { 0 };
 byte currentByte = 0;
 int bytesRead = 0;
 char currentID[11] = { 0 };
 
+// Now for the real stuff...
+
+// Store error strings in flash to save RAM
+#define error(s) error_P(PSTR(s))
+
+void error_P(const char* str) {
+  PgmPrint("error: ");
+  SerialPrintln_P(str);
+  while(1);
+}
+
 void setup() {
   Serial.begin(9600);
-  
-  if (!SD.begin(4)) {
-    Serial.println("SD FAIL (-_-)");
-    crashAndBurn();
-  }
-  
+  // Set pin modes
   pinMode(RELAY_PIN, OUTPUT);
+	// Initialize the Ethernet adapter
+	Ethernet.begin(mac, ip);
+	delay(1000); // Wait a bit...
+  server.begin();
+	// Start the SD card
+	if (!SD.begin(4)) error("card.init failed!");
 }
 
 void loop() {
@@ -98,7 +121,6 @@ boolean seekRFID(char *id) {
           if (strcmp(currentID, id) == 0) foundID = true;
         } else {
           int filePos = openFile.position() + 10;
-          if (!openFile.seek(filePos)) crashAndBurn();
         }
       } else {
         break;
@@ -119,11 +141,4 @@ void unlockDoor(int delaySecs) {
   digitalWrite(RELAY_PIN, HIGH);
   delay(delaySecs);
   digitalWrite(RELAY_PIN, LOW);
-}
-
-void crashAndBurn() {
-  // Why are you here?
-  // Because you made a mistake.
-  for(;;)
-    ;
 }
